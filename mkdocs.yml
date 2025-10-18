@@ -1,0 +1,11 @@
+site_name: Agentic MD Docs
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Style Guide: style_guide.md
+  - API:
+      - pkg.module_a: api/pkg/module_a.md
+markdown_extensions:
+  - toc:
+      permalink: true

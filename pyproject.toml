@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-md-docs"
+version = "0.1.0"
+description = "Agentic RAG for generating Markdown API docs"
+authors = [{name = "Your Name"}]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "sentence-transformers>=2.7",
+  "faiss-cpu>=1.8",
+  "numpy>=1.26",
+  "markdown-it-py>=3.0",
+  "jinja2>=3.1",
+  "pyyaml>=6.0",
+  "click>=8.1",
+  "networkx>=3.2",
+  "gitpython>=3.1",
+  "llama-cpp-python>=0.2; platform_system != 'Windows'",
+  "pandas>=2.2",
+  "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+qdrant = ["qdrant-client>=1.9"]
+dev = ["pytest", "black", "isort", "flake8", "mdformat"]
+
+[project.scripts]
+agentic-docs = "agentic_docs.cli:main"
