@@ -1,0 +1,392 @@
+Metadata-Version: 2.4
+Name: agentic-md-docs
+Version: 0.1.0
+Summary: Agentic RAG for generating Markdown API docs
+Author: Your Name
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pydantic>=2.7
+Requires-Dist: pydantic-settings>=2.3
+Requires-Dist: sentence-transformers>=2.7
+Requires-Dist: faiss-cpu>=1.8
+Requires-Dist: numpy>=1.26
+Requires-Dist: markdown-it-py>=3.0
+Requires-Dist: jinja2>=3.1
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: click>=8.1
+Requires-Dist: networkx>=3.2
+Requires-Dist: gitpython>=3.1
+Requires-Dist: llama-cpp-python>=0.2; platform_system != "Windows"
+Requires-Dist: pandas>=2.2
+Requires-Dist: matplotlib>=3.8
+Requires-Dist: langchain>=0.1
+Requires-Dist: langchain-community>=0.0
+Requires-Dist: langchain-huggingface>=0.0
+Provides-Extra: qdrant
+Requires-Dist: qdrant-client>=1.9; extra == "qdrant"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: isort; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Requires-Dist: mdformat; extra == "dev"
+Dynamic: license-file
+
+# Agentic RAG for Markdown API Documentation
+
+A system that parses a Python codebase, indexes symbols, retrieves focused context, and generates or updates **Markdown** API documentation under `docs/`. It updates selectively based on git diffs and a lightweight dependency graph. Designed for Linux, Python 3.11, and local models.
+
+- Output lives outside code (no docstrings), optionally published via **MkDocs**.
+- Baselines for comparison: **classical** (pdoc/Sphinx), **non-RAG LLM**, **static RAG**.
+- Minimal external services. Local embeddings and local LLM preferred.
+
+---
+
+## Table of Contents
+- [Features](#features)
+- [Architecture](#architecture)
+- [Milestones 6–8 Weeks](#milestones-6-8-weeks)
+- [Repository Structure](#repository-structure)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [How It Works](#how-it-works)
+- [Markdown Output Conventions](#markdown-output-conventions)
+- [Evaluation Plan](#evaluation-plan)
+- [CI Workflows](#ci-workflows)
+- [Roadmap](#roadmap)
+- [Development](#development)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
+---
+
+## Features
+- **Parser and Indexer**: AST-based extraction of modules, classes, functions, methods. Hashing and metadata for incremental updates.
+- **Embeddings + Vector Search**: Local embeddings (e5/bge small) and FAISS (Qdrant optional). Simple filters and optional MMR reranking.
+- **Markdown Writer**: Deterministic sections with markers and source-hash guards to avoid noisy diffs.
+- **Agent Controller**: Diff-aware impact analysis, dependency expansion, budget control, refine/fallback loop.
+- **CI Integration**: Propose updates on PRs, apply on main. Optional MkDocs site.
+- **Evaluation Harness**: Baselines, commit-replay, metrics and plots.
+
+---
+
+## Architecture
+- **Parsing/Indexing**: Walk files, parse with `ast` (or `libcst` if comments needed). Build symbol records and embedding texts, encode, store vectors + metadata.
+- **Retrieval**: Nearest-neighbor search over vectors, with filters by file/module. Optional MMR reranking.
+- **LLM Generation**: Prompted writer outputs Markdown sections with strict structure. Validators enforce coverage and basic example checks.
+- **Agentic Control**: Reads git diff, expands to dependents via a lightweight dependency graph, prioritizes under a token/time budget, regenerates only impacted sections.
+- **Docs**: One Markdown file per module, sections for classes, methods, and functions.
+
+---
+
+## Milestones 6–8 Weeks
+**W1, Schema + Parser**
+- Define `Symbol` schema. Implement file walker, AST parse, hashing. Unit tests on toy repo.
+
+**W2, Embeddings + Index**
+- Build embedding text constructor. Implement FAISS index + metadata store. Search API with filters.
+
+**W3, LLM Markdown Writer**
+- Prompt templates, local LLM interface (llama.cpp or vLLM). Validators (params/returns/examples). Markdown writer with markers.
+
+**W4, Agent Controller**
+- Git diff detection, dependency map, impact analysis, budget manager. End-to-end on toy repo.
+
+**W5, CI Integration**
+- GitHub Actions for PR propose and main apply. Config via Pydantic. Logging and counters.
+
+**W6, Baselines + Evaluation**
+- Classical (pdoc/Sphinx), Non-RAG LLM, Static RAG. Commit-replay evaluation, CSV and plots.
+
+**W7–8, Optional**
+- MMR reranking, Qdrant backend, ablations and error analysis, MkDocs publishing.
+
+---
+
+## Repository Structure
+```
+agentic-md-docs/
+  .github/workflows/
+    ci.yml                    # parse/index + propose/apply on PR/main
+    pages.yml                 # optional: MkDocs publish
+  docs/
+    index.md
+    style_guide.md
+    api/                      # generated module pages live here
+  examples/
+    toy_repo/
+      src/pkg/__init__.py
+      src/pkg/module_a.py
+  scripts/
+    bootstrap.sh
+    run_local_llm.sh
+  src/agentic_docs/
+    __init__.py
+    cli.py                    # CLI entry points
+    config.py                 # environment-driven settings
+    types.py                  # Symbol dataclass
+    logging_utils.py
+
+    parsing/
+      __init__.py
+      symbols.py              # AST extraction + hashing
+      relations.py            # dependency graph (imports/parents), TODO
+
+    index/
+      __init__.py
+      embed.py                # sentence-transformers wrapper, TODO
+      store_faiss.py          # FAISS store, TODO
+      store_qdrant.py         # optional Qdrant backend, TODO
+      metadata_store.py       # JSONL/SQLite store, TODO
+      search.py               # retrieval API, TODO
+      mmr.py                  # optional reranking, TODO
+
+    llm/
+      __init__.py
+      local_llm.py            # llama.cpp or vLLM wrapper, TODO
+      prompts.py              # Markdown prompt template
+      validate.py             # coverage checks, example smoke tests, TODO
+      writer_md.py            # orchestrates generation over changes (stub)
+
+    agent/
+      __init__.py
+      diff.py                 # git diff helpers, TODO
+      impact.py               # impacted symbols from diffs + deps, TODO
+      planner.py              # budget-aware plan, TODO
+      budget.py
+      orchestrator.py         # end-to-end pipeline, TODO
+
+    io/
+      __init__.py
+      fs.py                   # atomic writes, TODO
+      git.py                  # sha/permalinks, TODO
+      source_links.py         # GitHub permalinks, TODO
+      markdown_writer.py      # upsert sections with markers, TODO
+
+    eval/
+      __init__.py
+      run_bench.py            # evaluation runner (stub)
+      metrics.py              # metrics computation, TODO
+      datasets.py             # commit replay datasets, TODO
+
+    baselines/
+      __init__.py
+      classical_pdoc.py       # classical reference (no generation), TODO
+      nonrag_llm.py           # LLM over raw source, TODO
+      static_rag.py           # fixed top-k retrieval, TODO
+
+  tests/
+    test_parsing.py
+    test_index.py
+    test_writer_md.py
+    test_agent.py
+
+  .env.example
+  .gitignore
+  CONTRIBUTING.md
+  LICENSE
+  Makefile
+  mkdocs.yml
+  pyproject.toml
+  README.md
+```
+
+---
+
+## Installation
+Requirements
+- Linux
+- Python 3.11
+- Optional GPU. Otherwise use a small quantized GGUF model via `llama-cpp-python`.
+
+Steps
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e .[dev]
+cp .env.example .env
+```
+
+Toy example
+```bash
+make index-all
+make propose-md     # dry run: show what would change
+make apply-md       # write sections into docs/
+```
+
+MkDocs site (optional)
+```bash
+pip install mkdocs mkdocs-material
+mkdocs build
+# GitHub Pages workflow: .github/workflows/pages.yml
+```
+
+---
+
+## Configuration
+`.env` overrides defaults in `src/agentic_docs/config.py`.
+```ini
+EMBED_MODEL=intfloat/e5-base-v2
+LLM_MODEL=codellama-7b-instruct.Q4_K_M.gguf
+VECTOR_BACKEND=faiss
+DOCS_ROOT=docs
+SRC_ROOT=src
+```
+
+Model notes
+- Embeddings: start with a small e5/bge model; switch to a code-tuned model if needed.
+- Generator: 7B–13B instruct model. CPU path via GGUF + `llama-cpp-python`; GPU path via `vllm`.
+
+---
+
+## Usage
+CLI
+```bash
+# Parse and index
+agentic-docs index --all --root .
+agentic-docs index --changed-only --root .
+
+# Generate Markdown for changed symbols
+agentic-docs generate --changed-only --markdown --dry-run
+agentic-docs generate --changed-only --markdown --write
+
+# Evaluation harness (stub)
+agentic-docs eval --repo ./examples/toy_repo
+```
+
+Make targets
+```bash
+make index-all
+make index-changed
+make propose-md
+make apply-md
+make test
+```
+
+---
+
+## How It Works
+1. **Parse & Extract**  
+   Walk Python files, parse with `ast`, extract symbols with `qualname`, signature, spans, hash, basic relations (imports, parent/child).
+
+2. **Embed & Index**  
+   Build a short text per symbol (header + optional docstring + trimmed body). Encode with a local embedding model. Store vectors (FAISS) and metadata (JSONL/SQLite).
+
+3. **Retrieve**  
+   For target symbol, retrieve top-k neighbors and optional dependents. Optional MMR reranking to reduce redundancy.
+
+4. **Generate Markdown**  
+   LLM produces a structured Markdown section. Validators check parameter/return coverage, example import/run, link resolution.
+
+5. **Agentic Planning**  
+   Inspect git diff; compute impacted symbols plus shallow dependents if the signature changed. Enforce a token/time budget. Retry once on validation failure, else fall back to a safe template stub.
+
+6. **Write Markdown**  
+   Upsert sections in `docs/api/<pkg>/<module>.md` guarded by markers and the last known source hash. Idempotent writes minimize diffs and merge conflicts.
+
+---
+
+## Markdown Output Conventions
+- One page per module: `docs/api/<pkg>/<module>.md`
+- Headings
+  - `# pkg.module` (module)
+  - `## ClassName` and per-method `### method(...)`
+  - `### func(...)` for top-level functions
+- Required sections:
+  - Summary
+  - Parameters
+  - Returns
+  - Raises
+  - Examples
+  - See also
+  - Source (permalink to code lines)
+- Section guards:
+  ```markdown
+  <!-- BEGIN: auto:pkg.module.func (hash=SHA256:...) -->
+  ### `func(x: int, y: int) -> int`
+
+  **Summary**  
+  ...
+
+  **Parameters**  
+  - `x` int, ...
+  - `y` int, ...
+
+  **Returns**  
+  - int, ...
+
+  **Raises**  
+  - `ValueError` when ...
+
+  **Examples**
+  ```python
+  from pkg.module import func
+  assert func(2, 3) == 5
+  ```
+  **See also**  
+  `pkg.module.other_func`
+
+  **Source**  
+  [`src/pkg/module.py:L120-L180`](../_src_links/pkg/module.py#L120-L180)
+  <!-- END: auto:pkg.module.func -->
+  ```
+
+---
+
+## Evaluation Plan
+**Baselines**
+1. **Classical**: pdoc or Sphinx autodoc (renders existing docs; no generation).
+2. **Non-RAG LLM**: generate from raw symbol source only; no retrieval.
+3. **Static RAG**: fixed top-k retrieval for each symbol; no agentic planning.
+
+**Metrics**
+- **Quality**: parameter/return coverage, raises coverage, hyperlink correctness, example executability, human rubric (accuracy, completeness, clarity).
+- **Efficiency**: LLM calls and tokens, wall-clock time per commit, sections touched.
+- **Robustness**: behavior across change types (new symbols, renames/moves, internal edits).
+
+**Protocol**
+- Choose 2–3 medium Python OSS repos and the included toy repo.
+- Replay a short commit sequence; run all methods per commit; collect metrics.
+- Report per-commit and aggregate results; include error analysis samples.
+
+---
+
+## CI Workflows
+- `ci.yml`: runs on PR and `main`.
+  - PR: index changed files, **propose** updates (dry run artifact or patch).
+  - Main: **apply** updates (write to `docs/`).
+- `pages.yml`: optional. Build and deploy MkDocs site on `main`.
+
+---
+
+## Roadmap
+- Implement dependency graph and basic call hints; tune impact expansion.
+- MMR reranking to improve retrieval diversity.
+- Qdrant backend with payload filters and persistence.
+- Stronger validators: importable examples, parameter name checks vs. signature, link checker.
+- Small UI to preview diffs and accept/reject sections.
+
+---
+
+## Development
+Conventions
+- Python 3.11, `black` + `isort`, `flake8`.
+- Deterministic writes: only update sections whose **source hash** changed.
+- Unit tests for parsing, indexing, writer, and agent planning.
+
+Commands
+```bash
+make format
+make test
+```
+
+---
+
+## License
+MIT. See `LICENSE`.
+
+---
+
+## Acknowledgements
+Design takes cues from repository agents and code-aware RAG systems. For further ideas, review open-source repository agents and RAG toolkits as references.

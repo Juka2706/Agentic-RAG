@@ -1,0 +1,2 @@
+[console_scripts]
+agentic-docs = agentic_docs.cli:main

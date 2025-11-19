@@ -24,6 +24,10 @@ dependencies = [
   "llama-cpp-python>=0.2; platform_system != 'Windows'",
   "pandas>=2.2",
   "matplotlib>=3.8",
+  "langchain>=0.1",
+  "langchain-community>=0.0",
+  "langchain-huggingface>=0.0",
+  "langchain-openai>=0.0",
 ]
 
 [project.optional-dependencies]

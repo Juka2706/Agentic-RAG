@@ -1,2 +1,39 @@
 """Embedding interface using sentence-transformers."""
-# TODO: model load, encode(texts)->np.ndarray
+from typing import List
+import numpy as np
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+
+class Embedder:
+    def __init__(self, model_name: str = "intfloat/e5-base-v2", device: str = "cpu"):
+        if SentenceTransformer is None:
+            raise ImportError("sentence-transformers not installed")
+        self.model = SentenceTransformer(model_name, device=device)
+        self._cache = {}
+
+    def encode(self, texts: List[str]) -> np.ndarray:
+        # Simple in-memory cache for now
+        # In production, use a persistent cache (disk/redis)
+        to_encode = []
+        indices = []
+        results = [None] * len(texts)
+
+        for i, text in enumerate(texts):
+            if text in self._cache:
+                results[i] = self._cache[text]
+            else:
+                to_encode.append(text)
+                indices.append(i)
+        
+        if to_encode:
+            # e5 models need "query: " or "passage: " prefix usually, 
+            # but for code we might just use raw or "passage: "
+            # For now, assuming raw usage or user handles prefix
+            embeddings = self.model.encode(to_encode, convert_to_numpy=True)
+            for idx, emb in zip(indices, embeddings):
+                self._cache[texts[idx]] = emb
+                results[idx] = emb
+                
+        return np.vstack(results)

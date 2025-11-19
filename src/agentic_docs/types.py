@@ -14,3 +14,4 @@ class Symbol:
     end: int
     hash: str
     imports: List[str]
+    decorators: List[str]

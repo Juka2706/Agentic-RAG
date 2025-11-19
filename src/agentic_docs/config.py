@@ -6,9 +6,18 @@ class Settings(BaseSettings):
     src_root: str = "src"
     docs_root: str = "docs"
     embed_model: str = "intfloat/e5-base-v2"
-    llm_model: str = "codellama-7b-instruct.Q4_K_M.gguf"
+    llm_model_path: str = ""
+    llm_api_base: str = "http://localhost:11434/v1"
+    llm_api_key: str = "ollama"
+    llm_is_local: bool = True
     vector: Literal["faiss", "qdrant"] = "faiss"
     k: int = 8
     budget_tokens: int = 200_000
+    n_ctx: int = 4096
+    n_gpu_layers: int = 0
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 settings = Settings()

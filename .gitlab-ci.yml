@@ -1,0 +1,44 @@
+stages:
+  - index
+  - propose
+  - apply
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+
+cache:
+  paths:
+    - .pip-cache/
+    - .venv/
+
+before_script:
+  - python -m venv .venv
+  - source .venv/bin/activate
+  - pip install -e .
+
+index_job:
+  stage: index
+  script:
+    - agentic-docs index --all --root .
+  artifacts:
+    paths:
+      - .index/
+
+propose_job:
+  stage: propose
+  script:
+    - agentic-docs generate --changed-only --markdown --dry-run
+  only:
+    - merge_requests
+
+apply_job:
+  stage: apply
+  script:
+    - agentic-docs generate --changed-only --markdown --write
+    - git config user.email "ci-bot@example.com"
+    - git config user.name "CI Bot"
+    - git add docs/
+    - git commit -m "Update API docs [skip ci]" || echo "No changes to commit"
+    - git push origin HEAD:$CI_COMMIT_REF_NAME
+  only:
+    - main
