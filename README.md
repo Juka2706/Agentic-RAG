@@ -1,357 +1,379 @@
-# Agentic RAG for Markdown API Documentation
+# Agentic-RAG for Markdown API Documentation
 
-A system that parses a Python codebase, indexes symbols, retrieves focused context, and generates or updates **Markdown** API documentation under `docs/`. It updates selectively based on git diffs and a lightweight dependency graph. Designed for Linux, Python 3.11, and local models.
+**Automatically generate high-quality Markdown API documentation from Python codebases using RAG and multi-agent LLMs.**
 
-- Output lives outside code (no docstrings), optionally published via **MkDocs**.
-- Baselines for comparison: **classical** (pdoc/Sphinx), **non-RAG LLM**, **static RAG**.
-- Minimal external services. Local embeddings and local LLM preferred.
+Agentic-RAG combines AST parsing, vector search, and intelligent agents to create comprehensive, maintainable API documentation that lives alongside your code. Unlike traditional documentation tools, it uses Retrieval-Augmented Generation (RAG) to understand code context and generate structured, clean Markdown with idempotent updates.
 
----
-
-## Table of Contents
-- [Features](#features)
-- [Architecture](#architecture)
-- [Milestones 6–8 Weeks](#milestones-6-8-weeks)
-- [Repository Structure](#repository-structure)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [How It Works](#how-it-works)
-- [Markdown Output Conventions](#markdown-output-conventions)
-- [Evaluation Plan](#evaluation-plan)
-- [CI Workflows](#ci-workflows)
-- [Roadmap](#roadmap)
-- [Development](#development)
-- [License](#license)
-- [Acknowledgements](#acknowledgements)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## Features
-- **Parser and Indexer**: AST-based extraction of modules, classes, functions, methods. Hashing and metadata for incremental updates.
-- **Embeddings + Vector Search**: Local embeddings (e5/bge small) and FAISS (Qdrant optional). Simple filters and optional MMR reranking.
-- **Markdown Writer**: Deterministic sections with markers and source-hash guards to avoid noisy diffs.
-- **Agent Controller**: Diff-aware impact analysis, dependency expansion, budget control, refine/fallback loop.
-- **CI Integration**: Propose updates on PRs, apply on main. Optional MkDocs site.
-- **Evaluation Harness**: Baselines, commit-replay, metrics and plots.
+## ✨ Features
+
+- **🤖 Multi-Agent Architecture**: Code Expert analyzes structure, Docs Expert generates clean Markdown
+- **🔍 Smart Context Retrieval**: RAG-powered documentation using vector search over your codebase
+- **⚡ Parallel Generation**: Configurable worker pool for fast, concurrent documentation generation
+- **🔒 Automatic Lock Management**: Self-healing Qdrant lock cleanup prevents concurrency issues
+- **📊 Progress Tracking**: Real-time progress bars for parsing, indexing, and generation
+- **🔄 Idempotent Updates**: Hash-based change detection preserves manual edits
+- **🌐 Flexible LLM Support**: Use local GGUF models or API services (Ollama, OpenAI)
+- **💾 Vector Database**: Qdrant integration with automatic retry and cleanup logic
+- **🛡️ Signal Handling**: Graceful shutdown on interruption (Ctrl+C)
+- **🎯 Clean Output**: Removes LLM "thinking" processes and ensures pure Markdown
 
 ---
 
-## Architecture
-- **Parsing/Indexing**: Walk files, parse with `ast` (or `libcst` if comments needed). Build symbol records and embedding texts, encode, store vectors + metadata.
-- **Retrieval**: Nearest-neighbor search over vectors, with filters by file/module. Optional MMR reranking.
-- **LLM Generation**: Prompted writer outputs Markdown sections with strict structure. Validators enforce coverage and basic example checks.
-- **Agentic Control**: Reads git diff, expands to dependents via a lightweight dependency graph, prioritizes under a token/time budget, regenerates only impacted sections.
-- **Docs**: One Markdown file per module, sections for classes, methods, and functions.
+## 🚀 Quick Start
 
----
+### Installation
 
-## Milestones 6–8 Weeks
-**W1, Schema + Parser**
-- Define `Symbol` schema. Implement file walker, AST parse, hashing. Unit tests on toy repo.
-
-**W2, Embeddings + Index**
-- Build embedding text constructor. Implement FAISS index + metadata store. Search API with filters.
-
-**W3, LLM Markdown Writer**
-- Prompt templates, local LLM interface (llama.cpp or vLLM). Validators (params/returns/examples). Markdown writer with markers.
-
-**W4, Agent Controller**
-- Git diff detection, dependency map, impact analysis, budget manager. End-to-end on toy repo.
-
-**W5, CI Integration**
-- GitHub Actions for PR propose and main apply. Config via Pydantic. Logging and counters.
-
-**W6, Baselines + Evaluation**
-- Classical (pdoc/Sphinx), Non-RAG LLM, Static RAG. Commit-replay evaluation, CSV and plots.
-
-**W7–8, Optional**
-- MMR reranking, Qdrant backend, ablations and error analysis, MkDocs publishing.
-
----
-
-## Repository Structure
-```
-agentic-md-docs/
-  .github/workflows/
-    ci.yml                    # parse/index + propose/apply on PR/main
-    pages.yml                 # optional: MkDocs publish
-  docs/
-    index.md
-    style_guide.md
-    api/                      # generated module pages live here
-  examples/
-    toy_repo/
-      src/pkg/__init__.py
-      src/pkg/module_a.py
-  scripts/
-    bootstrap.sh
-    run_local_llm.sh
-  src/agentic_docs/
-    __init__.py
-    cli.py                    # CLI entry points
-    config.py                 # environment-driven settings
-    types.py                  # Symbol dataclass
-    logging_utils.py
-
-    parsing/
-      __init__.py
-      symbols.py              # AST extraction + hashing
-      relations.py            # dependency graph (imports/parents), TODO
-
-    index/
-      __init__.py
-      embed.py                # sentence-transformers wrapper, TODO
-      store_faiss.py          # FAISS store, TODO
-      store_qdrant.py         # optional Qdrant backend, TODO
-      metadata_store.py       # JSONL/SQLite store, TODO
-      search.py               # retrieval API, TODO
-      mmr.py                  # optional reranking, TODO
-
-    llm/
-      __init__.py
-      local_llm.py            # llama.cpp or vLLM wrapper, TODO
-      prompts.py              # Markdown prompt template
-      validate.py             # coverage checks, example smoke tests, TODO
-      writer_md.py            # orchestrates generation over changes (stub)
-
-    agent/
-      __init__.py
-      diff.py                 # git diff helpers, TODO
-      impact.py               # impacted symbols from diffs + deps, TODO
-      planner.py              # budget-aware plan, TODO
-      budget.py
-      orchestrator.py         # end-to-end pipeline, TODO
-
-    io/
-      __init__.py
-      fs.py                   # atomic writes, TODO
-      git.py                  # sha/permalinks, TODO
-      source_links.py         # GitHub permalinks, TODO
-      markdown_writer.py      # upsert sections with markers, TODO
-
-    eval/
-      __init__.py
-      run_bench.py            # evaluation runner (stub)
-      metrics.py              # metrics computation, TODO
-      datasets.py             # commit replay datasets, TODO
-
-    baselines/
-      __init__.py
-      classical_pdoc.py       # classical reference (no generation), TODO
-      nonrag_llm.py           # LLM over raw source, TODO
-      static_rag.py           # fixed top-k retrieval, TODO
-
-  tests/
-    test_parsing.py
-    test_index.py
-    test_writer_md.py
-    test_agent.py
-
-  .env.example
-  .gitignore
-  CONTRIBUTING.md
-  LICENSE
-  Makefile
-  mkdocs.yml
-  pyproject.toml
-  README.md
-```
-
----
-
-## Installation
-Requirements
-- Linux
-- Python 3.11
-- Optional GPU. Otherwise use a small quantized GGUF model via `llama-cpp-python`.
-
-Steps
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e .[dev]
-cp .env.example .env
+# Clone the repository
+git clone https://github.com/yourusername/agentic-rag.git
+cd agentic-rag
+
+# Create virtual environment and install
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -e .
 ```
 
-Toy example
-```bash
-make index-all
-make propose-md     # dry run: show what would change
-make apply-md       # write sections into docs/
-```
+### Basic Usage
 
-MkDocs site (optional)
 ```bash
-pip install mkdocs mkdocs-material
-mkdocs build
-# GitHub Pages workflow: .github/workflows/pages.yml
+# 1. Index your codebase
+agentic-docs index --root . --all
+
+# 2. Generate documentation (with Ollama)
+agentic-docs generate \
+  --api \
+  --model-path "qwen3:8b" \
+  --api-base "http://localhost:11434/v1" \
+  --workers 8
+
+# 3. View generated docs
+ls docs/api/
 ```
 
 ---
 
-## Configuration
-`.env` overrides defaults in `src/agentic_docs/config.py`.
-```ini
+## 📖 Documentation
+
+- **[Architecture](docs/architecture.md)** - System design and component details
+- **[Configuration](#configuration)** - Environment variables and CLI options
+- **[Examples](#examples)** - Common usage patterns
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    CLI[CLI] --> Orchestrator
+    Orchestrator --> Parser[Symbol Parser]
+    Orchestrator --> Embedder[Embedder]
+    Orchestrator --> Qdrant[Vector Store]
+    Orchestrator --> Agents[Multi-Agent System]
+    Orchestrator --> Writer[Markdown Writer]
+    
+    Agents --> CodeExpert[Code Expert]
+    Agents --> DocsExpert[Docs Expert]
+    
+    CodeExpert --> LLM[LLM]
+    DocsExpert --> LLM
+    
+    style Orchestrator fill:#fff4e1
+    style Agents fill:#ffe1e1
+    style Qdrant fill:#e1ffe1
+```
+
+### Key Components
+
+| Component | Description | Technology |
+|-----------|-------------|------------|
+| **Parser** | AST-based symbol extraction | Python `ast` module |
+| **Embedder** | Text-to-vector encoding | Sentence Transformers |
+| **Vector Store** | Semantic search and storage | Qdrant (local/server) |
+| **Code Expert** | Analyzes code structure | LangChain + LLM |
+| **Docs Expert** | Generates Markdown | LangChain + LLM |
+| **Writer** | Idempotent section updates | Custom implementation |
+
+See the full [Architecture Documentation](docs/architecture.md) for details.
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+# LLM Configuration
+LLM_IS_LOCAL=False              # Use API instead of local GGUF
+LLM_MODEL_PATH=qwen3:8b         # Model name (API) or path (local)
+LLM_API_BASE=http://localhost:11434/v1
+LLM_API_KEY=ollama
+
+# Performance
+MAX_WORKERS=4                   # Parallel worker count
+
+# Embedding
 EMBED_MODEL=intfloat/e5-base-v2
-LLM_MODEL=codellama-7b-instruct.Q4_K_M.gguf
-VECTOR_BACKEND=faiss
-DOCS_ROOT=docs
-SRC_ROOT=src
+DEVICE=cpu                      # or 'cuda' for GPU
 ```
 
-Model notes
-- Embeddings: start with a small e5/bge model; switch to a code-tuned model if needed.
-- Generator: 7B–13B instruct model. CPU path via GGUF + `llama-cpp-python`; GPU path via `vllm`.
+### CLI Options
 
----
-
-## Usage
-CLI
+#### Index Command
 ```bash
-# Parse and index
-agentic-docs index --all --root .
-agentic-docs index --changed-only --root .
+agentic-docs index [OPTIONS]
 
-# Generate Markdown for changed symbols
-agentic-docs generate --changed-only --markdown --dry-run
-agentic-docs generate --changed-only --markdown --write
-
-# Evaluation harness (stub)
-agentic-docs eval --repo ./examples/toy_repo
+Options:
+  --root TEXT       Root directory to index (default: .)
+  --all             Index all files (ignores git diff)
+  --changed-only    Only index changed files
 ```
 
-Make targets
+#### Generate Command
 ```bash
-make index-all
-make index-changed
-make propose-md
-make apply-md
-make test
+agentic-docs generate [OPTIONS]
+
+Options:
+  --changed-only        Only generate docs for changed symbols
+  --dry-run            Show what would change without writing
+  --write              Write documentation files
+  --model-path TEXT    Model name (API) or path (local GGUF)
+  --api                Use API-based LLM (Ollama/OpenAI)
+  --api-base TEXT      API base URL
+  --api-key TEXT       API key
+  --workers INTEGER    Number of parallel workers (default: 4)
 ```
 
 ---
 
-## How It Works
-1. **Parse & Extract**  
-   Walk Python files, parse with `ast`, extract symbols with `qualname`, signature, spans, hash, basic relations (imports, parent/child).
+## 📚 Examples
 
-2. **Embed & Index**  
-   Build a short text per symbol (header + optional docstring + trimmed body). Encode with a local embedding model. Store vectors (FAISS) and metadata (JSONL/SQLite).
+### Using Local GGUF Model
 
-3. **Retrieve**  
-   For target symbol, retrieve top-k neighbors and optional dependents. Optional MMR reranking to reduce redundancy.
-
-4. **Generate Markdown**  
-   LLM produces a structured Markdown section. Validators check parameter/return coverage, example import/run, link resolution.
-
-5. **Agentic Planning**  
-   Inspect git diff; compute impacted symbols plus shallow dependents if the signature changed. Enforce a token/time budget. Retry once on validation failure, else fall back to a safe template stub.
-
-6. **Write Markdown**  
-   Upsert sections in `docs/api/<pkg>/<module>.md` guarded by markers and the last known source hash. Idempotent writes minimize diffs and merge conflicts.
-
----
-
-## Markdown Output Conventions
-- One page per module: `docs/api/<pkg>/<module>.md`
-- Headings
-  - `# pkg.module` (module)
-  - `## ClassName` and per-method `### method(...)`
-  - `### func(...)` for top-level functions
-- Required sections:
-  - Summary
-  - Parameters
-  - Returns
-  - Raises
-  - Examples
-  - See also
-  - Source (permalink to code lines)
-- Section guards:
-  ```markdown
-  <!-- BEGIN: auto:pkg.module.func (hash=SHA256:...) -->
-  ### `func(x: int, y: int) -> int`
-
-  **Summary**  
-  ...
-
-  **Parameters**  
-  - `x` int, ...
-  - `y` int, ...
-
-  **Returns**  
-  - int, ...
-
-  **Raises**  
-  - `ValueError` when ...
-
-  **Examples**
-  ```python
-  from pkg.module import func
-  assert func(2, 3) == 5
-  ```
-  **See also**  
-  `pkg.module.other_func`
-
-  **Source**  
-  [`src/pkg/module.py:L120-L180`](../_src_links/pkg/module.py#L120-L180)
-  <!-- END: auto:pkg.module.func -->
-  ```
-
----
-
-## Evaluation Plan
-**Baselines**
-1. **Classical**: pdoc or Sphinx autodoc (renders existing docs; no generation).
-2. **Non-RAG LLM**: generate from raw symbol source only; no retrieval.
-3. **Static RAG**: fixed top-k retrieval for each symbol; no agentic planning.
-
-**Metrics**
-- **Quality**: parameter/return coverage, raises coverage, hyperlink correctness, example executability, human rubric (accuracy, completeness, clarity).
-- **Efficiency**: LLM calls and tokens, wall-clock time per commit, sections touched.
-- **Robustness**: behavior across change types (new symbols, renames/moves, internal edits).
-
-**Protocol**
-- Choose 2–3 medium Python OSS repos and the included toy repo.
-- Replay a short commit sequence; run all methods per commit; collect metrics.
-- Report per-commit and aggregate results; include error analysis samples.
-
----
-
-## CI Workflows
-- `ci.yml`: runs on PR and `main`.
-  - PR: index changed files, **propose** updates (dry run artifact or patch).
-  - Main: **apply** updates (write to `docs/`).
-- `pages.yml`: optional. Build and deploy MkDocs site on `main`.
-
----
-
-## Roadmap
-- Implement dependency graph and basic call hints; tune impact expansion.
-- MMR reranking to improve retrieval diversity.
-- Qdrant backend with payload filters and persistence.
-- Stronger validators: importable examples, parameter name checks vs. signature, link checker.
-- Small UI to preview diffs and accept/reject sections.
-
----
-
-## Development
-Conventions
-- Python 3.11, `black` + `isort`, `flake8`.
-- Deterministic writes: only update sections whose **source hash** changed.
-- Unit tests for parsing, indexing, writer, and agent planning.
-
-Commands
 ```bash
-make format
-make test
+# Download a model (e.g., using llama.cpp)
+wget https://huggingface.co/.../model.gguf
+
+# Generate with local model
+agentic-docs generate \
+  --model-path /path/to/model.gguf
+```
+
+### Using Ollama
+
+```bash
+# Start Ollama server
+ollama serve
+
+# Pull a model
+ollama pull qwen3:8b
+
+# Generate documentation
+agentic-docs generate \
+  --api \
+  --model-path "qwen3:8b" \
+  --api-base "http://localhost:11434/v1" \
+  --workers 8
+```
+
+### Using OpenAI API
+
+```bash
+agentic-docs generate \
+  --api \
+  --model-path "gpt-4" \
+  --api-base "https://api.openai.com/v1" \
+  --api-key "your-api-key"
+```
+
+### Sequential Processing (Debug Mode)
+
+```bash
+# Use 1 worker for easier debugging
+agentic-docs generate \
+  --api \
+  --model-path "qwen3:8b" \
+  --api-base "http://localhost:11434/v1" \
+  --workers 1
 ```
 
 ---
 
-## License
-MIT. See `LICENSE`.
+## 🔧 Development
+
+### Project Structure
+
+```
+src/agentic_docs/
+├── cli.py                 # CLI entry point
+├── config.py              # Configuration management
+├── agent/
+│   ├── agents.py          # Multi-agent orchestration
+│   └── orchestrator.py    # Pipeline manager
+├── parsing/
+│   └── symbols.py         # AST-based symbol extraction
+├── index/
+│   ├── embed.py           # Sentence-transformers wrapper
+│   └── store_qdrant.py    # Qdrant vector store
+├── llm/
+│   ├── local_llm.py       # Local GGUF model wrapper
+│   ├── api_llm.py         # API LLM wrapper
+│   └── prompts.py         # Agent prompts
+└── io/
+    └── markdown_writer.py # Idempotent Markdown writer
+```
+
+### Running Tests
+
+```bash
+# Install development dependencies
+pip install -e .[dev]
+
+# Run tests
+pytest tests/
+
+# Code formatting
+black src/
+isort src/
+```
 
 ---
 
-## Acknowledgements
-Design takes cues from repository agents and code-aware RAG systems. For further ideas, review open-source repository agents and RAG toolkits as references.
+## 🎯 How It Works
+
+### 1. **Parsing**
+- Scans Python files using AST
+- Extracts symbols (classes, functions, methods)
+- Computes content hashes for change detection
+
+### 2. **Embedding & Indexing**
+- Encodes symbol text to 768-dim vectors
+- Stores in Qdrant vector database
+- Enables semantic search over codebase
+
+### 3. **Context Retrieval**
+- Finds related symbols via vector similarity
+- Provides context to LLM agents
+- Ensures comprehensive documentation
+
+### 4. **Multi-Agent Generation**
+- **Code Expert**: Analyzes code structure and complexity
+- **Docs Expert**: Generates clean, structured Markdown
+- **Output Cleaning**: Removes thinking processes and code fences
+
+### 5. **Idempotent Writing**
+- Updates only changed sections
+- Uses hash guards: `<!-- BEGIN: auto:symbol_id (hash=...) -->`
+- Preserves manual edits outside guards
+
+---
+
+## 📊 Performance
+
+### Typical Performance (68 symbols, 4 workers)
+
+| Phase | Time | Speed |
+|-------|------|-------|
+| Parsing | ~2s | 34 symbols/s |
+| Embedding | ~3s | 22 symbols/s |
+| Retrieval | ~15s | 4.5 symbols/s |
+| Generation | ~1m 23s | 1.2s/symbol |
+
+**Tips for Optimization**:
+- Increase `--workers` for faster generation (e.g., 8 or 16)
+- Use GPU for embeddings: `DEVICE=cuda`
+- Switch to server-mode Qdrant for concurrent retrieval
+- Use faster models (smaller parameter count)
+
+---
+
+## 🛠️ Troubleshooting
+
+### Qdrant Lock Error
+
+If you see `RuntimeError: Storage folder .qdrant is already accessed`:
+
+```bash
+# The system auto-cleans locks, but you can force it:
+pkill -9 -f agentic-docs
+find .qdrant -name "*.lock" -delete
+```
+
+**Note**: The latest version includes automatic lock cleanup and retry logic.
+
+### Slow Generation
+
+```bash
+# Check worker count
+agentic-docs generate --workers 8  # Increase workers
+
+# Use a faster model
+agentic-docs generate --model-path "qwen3:4b"  # Smaller model
+```
+
+### LLM Output Issues
+
+If documentation contains "thinking" or code fences:
+
+- The system automatically cleans `<think>` tags and markdown fences
+- If issues persist, update `src/agentic_docs/llm/prompts.py` with stronger constraints
+
+---
+
+## 🗺️ Roadmap
+
+### Completed ✅
+- [x] AST-based parsing with metadata extraction
+- [x] Qdrant vector store integration
+- [x] Multi-agent LLM architecture
+- [x] Parallel generation with ThreadPoolExecutor
+- [x] Automatic lock cleanup and retry logic
+- [x] Progress bars for user feedback
+- [x] Signal handlers for graceful shutdown
+- [x] Support for local and API LLMs
+- [x] Idempotent Markdown writer
+
+### Planned 🔜
+- [ ] Incremental updates (hash-based change detection)
+- [ ] Server-mode Qdrant for true concurrent access
+- [ ] Dependency graph for impact analysis
+- [ ] MkDocs integration and publishing
+- [ ] Multi-language support (JavaScript, TypeScript, Go)
+- [ ] Custom documentation templates
+- [ ] GitLab/GitHub CI/CD workflows
+- [ ] Evaluation harness with baselines
+
+---
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgements
+
+This project builds on ideas from:
+- Repository agents and code-aware RAG systems
+- LangChain for LLM orchestration
+- Sentence Transformers for embeddings
+- Qdrant for vector search
+
+---
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/agentic-rag/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/agentic-rag/discussions)
+- **Documentation**: [docs/architecture.md](docs/architecture.md)
+
+---
+
+**Built with ❤️ by the Agentic-RAG Team**
