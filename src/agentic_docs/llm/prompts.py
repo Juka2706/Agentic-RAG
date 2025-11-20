@@ -59,6 +59,10 @@ Generate the Markdown documentation following this structure:
 **See also**
 ...
 
-Output ONLY the Markdown.
+CRITICAL INSTRUCTIONS:
+1. Output ONLY the Markdown content.
+2. DO NOT output any "thinking" process, reasoning, or internal monologue.
+3. DO NOT output any conversational text like "Here is the documentation".
+4. DO NOT wrap the output in markdown code blocks (e.g. ```markdown ... ```). Just output the raw markdown.
 """
 )

@@ -1,7 +1,6 @@
 import click
 import os
 from .agent.orchestrator import Orchestrator
-from .eval.run_bench import run_eval
 
 @click.group()
 def main():
@@ -34,7 +33,8 @@ def index(all_, changed_only, root):
 @click.option("--api", is_flag=True, help="Use API-based LLM (e.g. qwen3:8b)")
 @click.option("--api-base", help="API Base URL (default: http://localhost:11434/v1)")
 @click.option("--api-key", help="API Key (default: ollama)")
-def generate(changed_only, markdown, dry_run, write, model_path, api, api_base, api_key):
+@click.option("--workers", type=int, default=4, help="Number of parallel workers")
+def generate(changed_only, markdown, dry_run, write, model_path, api, api_base, api_key, workers):
     """Generate documentation."""
     from .config import settings
     
@@ -46,15 +46,14 @@ def generate(changed_only, markdown, dry_run, write, model_path, api, api_base, 
         settings.llm_api_base = api_base
     if api_key:
         settings.llm_api_key = api_key
+    if workers:
+        settings.max_workers = workers
         
     config = settings.dict()
+    config["dry_run"] = dry_run
+    
     orch = Orchestrator(config)
     orch.run(changed_only=changed_only)
-
-@main.command()
-@click.option("--repo", required=True)
-def eval(repo):
-    run_eval(repo)
 
 if __name__ == "__main__":
     main()

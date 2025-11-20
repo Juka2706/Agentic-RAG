@@ -14,8 +14,25 @@ class DocumentationAgents:
     def generate_docs(self, analysis: str, existing_docs: str = "") -> str:
         return self.docs_expert.invoke({"analysis": analysis, "existing_docs": existing_docs})
 
+    def _clean_output(self, text: str) -> str:
+        """Clean the LLM output to remove thinking tags and markdown fences."""
+        # Remove <think> blocks (common in reasoning models)
+        import re
+        text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+        
+        # Remove markdown code fences if the model wrapped the whole output
+        text = text.strip()
+        if text.startswith("```markdown"):
+            text = text[11:]
+        elif text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+            
+        return text.strip()
+
     def process_symbol(self, code: str, context: str = "", existing_docs: str = "") -> str:
         """Orchestrates the full pipeline for a single symbol."""
         analysis = self.analyze_code(code, context)
         markdown = self.generate_docs(analysis, existing_docs)
-        return markdown
+        return self._clean_output(markdown)

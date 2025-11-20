@@ -13,7 +13,6 @@ dependencies = [
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "sentence-transformers>=2.7",
-  "faiss-cpu>=1.8",
   "numpy>=1.26",
   "markdown-it-py>=3.0",
   "jinja2>=3.1",
@@ -31,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-qdrant = ["qdrant-client>=1.9"]
+qdrant = ["qdrant-client>=1.9", "tqdm"]
 dev = ["pytest", "black", "isort", "flake8", "mdformat"]
 
 [project.scripts]
