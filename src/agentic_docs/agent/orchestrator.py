@@ -10,7 +10,7 @@ from tqdm import tqdm
 from ..parsing.symbols import index_repo, Symbol
 from ..index.embed import Embedder
 from ..index.embed import Embedder
-from ..llm.local_llm import LocalLLM
+
 from ..agent.agents import DocumentationAgents
 from ..io.markdown_writer import MarkdownWriter
 
@@ -41,30 +41,17 @@ class Orchestrator:
         signal.signal(signal.SIGTERM, self._signal_handler)
         
         # LLM & Agents
-        model_path = config.get("llm_model_path", "")
-        is_local = config.get("llm_is_local", True)
+        model_name = config.get("llm_model_name", "default")
         
-        if not is_local:
-            # Use API LLM
-            from ..llm.api_llm import APILLM
-            print(f"Using API LLM at {config.get('llm_api_base')}")
-            llm = APILLM(
-                base_url=config.get("llm_api_base"),
-                api_key=config.get("llm_api_key"),
-                model_name=model_path or "default" # Use model_path as model name for API
-            )
-            self.agents = DocumentationAgents(llm)
-        elif model_path and Path(model_path).exists():
-            # Use Local GGUF
-            llm = LocalLLM(
-                model_path=model_path,
-                n_ctx=config.get("n_ctx", 4096),
-                n_gpu_layers=config.get("n_gpu_layers", 0)
-            )
-            self.agents = DocumentationAgents(llm)
-        else:
-            print(f"Warning: No valid LLM configuration found. Generation will be disabled.")
-            self.agents = None
+        # Use API LLM
+        from ..llm.api_llm import APILLM
+        print(f"Using API LLM at {config.get('llm_api_base')}")
+        llm = APILLM(
+            base_url=config.get("llm_api_base"),
+            api_key=config.get("llm_api_key"),
+            model_name=model_name
+        )
+        self.agents = DocumentationAgents(llm)
         self.writer = MarkdownWriter(self.docs_root)
 
     def run(self, changed_only: bool = False):

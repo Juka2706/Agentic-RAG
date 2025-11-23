@@ -6,11 +6,10 @@ class Settings(BaseSettings):
     src_root: str = "src"
     docs_root: str = "docs"
     embed_model: str = "intfloat/e5-base-v2"
-    llm_model_path: str = ""
+    llm_model_name: str = "qwen2.5-coder:latest"
     llm_api_base: str = "http://localhost:11434/v1"
     llm_api_key: str = "ollama"
-    llm_is_local: bool = True
-    llm_is_local: bool = True
+
     k: int = 8
     max_workers: int = 4
     budget_tokens: int = 200_000
@@ -20,5 +19,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 settings = Settings()
