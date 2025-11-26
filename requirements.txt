@@ -83,6 +83,7 @@ tenacity==9.1.2
 threadpoolctl==3.6.0
 tokenizers==0.22.1
 torch==2.9.1
+torchinfo
 tqdm==4.67.1
 transformers==4.57.1
 typing-inspect==0.9.0
