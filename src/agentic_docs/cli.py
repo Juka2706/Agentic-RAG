@@ -33,7 +33,8 @@ def index(all_, changed_only, root):
 @click.option("--api-base", help="API Base URL (default: http://localhost:11434/v1)")
 @click.option("--api-key", help="API Key (default: ollama)")
 @click.option("--workers", type=int, default=4, help="Number of parallel workers")
-def generate(changed_only, markdown, dry_run, write, model, api_base, api_key, workers):
+@click.option("--mode", type=click.Choice(["static", "agentic"]), default="static", help="Generation mode")
+def generate(changed_only, markdown, dry_run, write, model, api_base, api_key, workers, mode):
     """Generate documentation."""
     from .config import settings
     
@@ -45,6 +46,8 @@ def generate(changed_only, markdown, dry_run, write, model, api_base, api_key, w
         settings.llm_api_key = api_key
     if workers:
         settings.max_workers = workers
+    if mode:
+        settings.mode = mode
         
     config = settings.dict()
     config["dry_run"] = dry_run

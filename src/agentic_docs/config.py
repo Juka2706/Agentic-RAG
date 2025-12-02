@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     budget_tokens: int = 200_000
     n_ctx: int = 4096
     n_gpu_layers: int = 0
+    
+    # Agent Mode
+    mode: str = "static"  # "static" or "agentic"
 
     class Config:
         env_file = ".env"
